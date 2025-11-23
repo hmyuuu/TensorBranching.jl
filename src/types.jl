@@ -34,6 +34,15 @@ abstract type AbstractRefiner end
     reoptimize::Bool = true # setting this to true will reoptimize the code after each round of rethermalization if the resulting sc is larger than sc0
 end
 
+@kwdef struct RankSARefiner{IT} <: AbstractRefiner
+    βs::IT = 1.0:1.0:20.0 # higher temperature range for dense graphs with algebraic structure
+    ntrials::Int = 5 # more trials to escape local optima in dense graphs
+    niters::Int = 50 # more iterations for thorough exploration
+    max_rounds::Int = 3 # additional refinement rounds for complex structure
+    reoptimize::Bool = true # reoptimize if improvement fails
+    bipartite_optimization::Bool = true # reserved for future bipartite-aware optimization strategies
+end
+
 @kwdef struct ReoptimizeRefiner <: AbstractRefiner
     optimizer::CodeOptimizer = TreeSA()
 end
