@@ -8,7 +8,7 @@ function ob_region(g::SimpleGraph{Int}, code::DynamicNestedEinsum{Int}, slicer::
     unique_large_tensors_iys = unique!(vcat(large_tensors_iys...))
 
     regions = [Vector{Int}() for _ in unique_large_tensors_iys]
-    Threads.@threads for i in 1:length(unique_large_tensors_iys)
+    Threads.@threads for i in eachindex(unique_large_tensors_iys)
         iy = unique_large_tensors_iys[i]
         region_i = select_region(g, iy, selector.n_max, selector.strategy)
         regions[i] = region_i
@@ -23,7 +23,7 @@ function ob_region(g::SimpleGraph{Int}, code::DynamicNestedEinsum{Int}, slicer::
         best_region = regions[argmin(losses)]
     elseif selector.loss == :num_uniques
         losses = zeros(Float64, length(unique_large_tensors_iys))
-        Threads.@threads for i in 1:length(unique_large_tensors_iys)
+        Threads.@threads for i in eachindex(unique_large_tensors_iys)
             iy = unique_large_tensors_iys[i]
             losses[i] = length(intersect(regions[i], iy))
         end

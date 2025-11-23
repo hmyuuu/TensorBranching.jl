@@ -1,5 +1,5 @@
 using OMEinsum: getixsv, getiyv, LeafString, flatten, _flatten, isleaf, decorate
-using OMEinsum.OMEinsumContractionOrders: IncidenceList, parse_eincode, eo2ct, ContractionTree
+using OMEinsum.OMEinsumContractionOrders: IncidenceList, parse_eincode, ContractionTree
 using TensorBranching.GenericTensorNetworks: rawcode
 using OptimalBranching.OptimalBranchingCore: IPSolver, LPSolver
 
@@ -51,9 +51,10 @@ end
 struct CompressedEinsum{LT}
     ixs::Vector{Vector{LT}}
     iy::Vector{LT}
-    ct::ContractionTree
-    function CompressedEinsum(ixs::Vector{Vector{LT}}, iy::Vector{LT}, ct::ContractionTree) where LT
-        return new{LT}(ixs, iy, ct)
+    ct::Union{ContractionTree, Int}
+    orig::NestedEinsum
+    function CompressedEinsum(ixs::Vector{Vector{LT}}, iy::Vector{LT}, ct::Union{ContractionTree, Int}, orig::NestedEinsum) where LT
+        return new{LT}(ixs, iy, ct, orig)
     end
 end
 
@@ -62,10 +63,16 @@ AbstractTrees.children(ct::ContractionTree) = [ct.left, ct.right]
 Base.show(io::IO, ct::ContractionTree) = print_tree(io, ct)
 
 function compress(code::NestedEinsum)
-    ixs = getixsv(code)
+    try
+        reform_tree!(code)
+    catch
+    end
+    ixd = Dict(OMEinsum._flatten(code))
+    tids = sort(collect(keys(ixd)))
+    ixs = [ixd[tid] for tid in tids]
     iy = getiyv(code)
     ct = ein2contraction_tree(code)
-    return CompressedEinsum(ixs, iy, ct)
+    return CompressedEinsum(ixs, iy, ct, code)
 end
 
 function compress(::Nothing)
@@ -73,9 +80,7 @@ function compress(::Nothing)
 end
 
 function uncompress(ce::CompressedEinsum{LT}) where LT
-    incidence_list = IncidenceList(Dict([i=>ix for (i, ix) in enumerate(ce.ixs)]))
-    code = parse_eincode(incidence_list, ce.ct, vertices = collect(1:length(ce.ixs)))
-    return decorate(code)
+    return ce.orig
 end
 
 function uncompress(::Nothing)

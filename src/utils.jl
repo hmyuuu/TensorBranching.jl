@@ -329,3 +329,4 @@ function quick_feasible_solution(graph::SimpleGraph,weights::Vector{T},time_limi
     optimize!(model)
     return objective_value(model)
 end
+OMEinsumContractionOrders.GreedyMethod(; α=0.0, temperature=0.0) = OMEinsumContractionOrders.GreedyMethod(α, temperature)

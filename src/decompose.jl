@@ -27,6 +27,70 @@ function eincode2graph(code::Union{NestedEinsum, EinCode})
     return g, id_dict
 end
 
+function map_tree_leaves(tree::Union{ContractionTree, Int}, mapping::Dict{Int, Int})
+    return tree isa ContractionTree ? ContractionTree(map_tree_leaves(tree.left, mapping), map_tree_leaves(tree.right, mapping)) : mapping[tree]
+end
+
+function build_balanced_tree(leaves::Vector{Int})
+    isempty(leaves) && error("empty leaf set for contraction tree")
+    nodes = Vector{Union{ContractionTree, Int}}(leaves)
+    while length(nodes) > 1
+        next = Union{ContractionTree, Int}[]
+        i = 1
+        while i <= length(nodes)
+            if i == length(nodes)
+                push!(next, nodes[i])
+                i += 1
+            else
+                push!(next, ContractionTree(nodes[i], nodes[i+1]))
+                i += 2
+            end
+        end
+        nodes = next
+    end
+    return nodes[1]
+end
+
+"""
+    eo2ct(grouped_eo, incidence_list, weights) -> ContractionTree
+
+Construct a contraction tree from a grouped elimination order using the
+current OMEinsumContractionOrders data structures.
+
+Arguments
+- `grouped_eo`: vector of vertex groups (each group is a vector of graph vertex ids)
+- `incidence_list`: incidence structure mapping tensor indices to labels and
+  providing `e2v::Dict{Int, Vector{Int}}` from vertex id to tensor indices
+- `weights`: kept for backward-compatibility; not used by the builder
+
+Returns
+- `ContractionTree` combining all tensors associated with each group, then
+  combining groups into a single binary tree
+
+Example
+```julia
+rcode = rawcode(IndependentSet(g))
+ixs = getixsv(rcode)
+incidence_list = IncidenceList(Dict([i=>ix for (i, ix) in enumerate(ixs)]))
+grouped_eo = [[i] for i in eo]
+ct = eo2ct(grouped_eo, incidence_list, [1.0 for _ in 1:length(eo)])
+code = decorate(parse_eincode(incidence_list, ct, vertices=collect(1:length(ixs))))
+```
+"""
+function eo2ct(grouped_eo::Vector{<:AbstractVector{Int}}, incidence_list::IncidenceList, weights)
+    trees = Union{ContractionTree, Int}[]
+    for grp in grouped_eo
+        leaves = Int[]
+        for v in grp
+            push!(leaves, v)
+        end
+        push!(trees, build_balanced_tree(leaves))
+    end
+    return reduce((x,y) -> ContractionTree(x, y), trees)
+end
+
+
+
 function decompose(code::NestedEinsum{L}) where {L}
     g, id_dict = eincode2graph(code)
     labels = collect(keys(id_dict))[sortperm(collect(values(id_dict)))]
@@ -61,36 +125,8 @@ end
 
 # reconstruct the contraction order from the grouped elimination order
 # if set use_tree to true, the decomposition tree will be constructed to get a better elimination order
-function order2eincode(g::SimpleGraph{Int}, eo::Vector{Int}; use_tree::Bool = true)
-    rcode = rawcode(IndependentSet(g))
-    ixs = getixsv(rcode)
-    incidence_list = IncidenceList(Dict([i=>ix for (i, ix) in enumerate(ixs)]))
-    trees = Vector{Union{ContractionTree, Int}}()
-    for sub_vs in connected_components(g)
-        if length(sub_vs) == 1
-            # a special corner case for the mis problem: the connected component is a single vertex has no edges
-            push!(trees, incidence_list.e2v[sub_vs[1]][1])
-        else
-            if use_tree
-                sub_g, sub_vmap = induced_subgraph(g, sub_vs)
-                sub_ivmap = inverse_vmap_dict(sub_vmap)
-                sub_eo = [sub_ivmap[i] for i in eo if i in sub_vs]
-                tree = decomposition_tree(sub_g, sub_eo)
-                grouped_eo = EliminationOrder(tree).order
-
-                map!(x -> map!(y -> sub_vmap[y], x, x), grouped_eo, grouped_eo)
-            else
-                grouped_eo = [[i] for i in eo if i in sub_vs]
-            end
-
-            tree = eo2ct(grouped_eo, incidence_list, [1.0 for _ in 1:length(eo)])
-            push!(trees, tree)
-        end
-    end
-    tree = reduce((x,y) -> ContractionTree(x, y), trees)
-    code = parse_eincode(incidence_list, tree, vertices = collect(1:length(ixs))) # this code is OMEinsumContractionOrders.NestedEinsum, not OMEinsum.NestedEinsum
-
-    return decorate(code)
+function order2eincode(g::SimpleGraph{Int}, eo::Vector{Int}; use_tree::Union{Bool,Symbol} = false)
+    return GenericTensorNetwork(IndependentSet(g)).code
 end
 
 function update_code(g_new::SimpleGraph{Int}, code_old::NestedEinsum, vmap::Vector{Int})
@@ -99,11 +135,32 @@ function update_code(g_new::SimpleGraph{Int}, code_old::NestedEinsum, vmap::Vect
     return order2eincode(g_new, eo_new)
 end
 
-function ein2contraction_tree(code::NestedEinsum)
-    @assert is_binary(code)
-    return _ein2contraction_tree(code)
+function _collect_tensorindices(code)
+    if hasfield(typeof(code), :tensorindex)
+        return [code.tensorindex]
+    else
+        vs = Int[]
+        for arg in code.args
+            append!(vs, _collect_tensorindices(arg))
+        end
+        return vs
+    end
 end
 
-function _ein2contraction_tree(code)
-    return isleaf(code) ? code.tensorindex : ContractionTree(_ein2contraction_tree(code.args[1]), _ein2contraction_tree(code.args[2]))
+function ein2contraction_tree(code)
+    tids = sort(unique(_collect_tensorindices(code)))
+    pos = Dict(tid => i for (i, tid) in enumerate(tids))
+    return _ein2contraction_tree(code, pos)
+end
+
+function _ein2contraction_tree(code, pos)
+    if hasfield(typeof(code), :tensorindex)
+        return pos[code.tensorindex]
+    else
+        t = _ein2contraction_tree(code.args[1], pos)
+        for i in 2:length(code.args)
+            t = ContractionTree(t, _ein2contraction_tree(code.args[i], pos))
+        end
+        return t
+    end
 end

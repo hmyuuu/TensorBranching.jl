@@ -1,3 +1,4 @@
+__precompile__(false)
 module TensorBranching
 
 using OptimalBranching
@@ -21,6 +22,8 @@ export SlicedBranch, CompressedEinsum
 # tree decomposition
 export decompose, max_bag
 export order2eincode, eincode2order
+export eo2ct
+export optimize_treewidth
 export compress, uncompress
 
 # omeinsum interface
