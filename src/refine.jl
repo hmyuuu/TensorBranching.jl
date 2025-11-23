@@ -18,6 +18,23 @@ function refine(code::DynamicNestedEinsum{LT}, size_dict::Dict{LT, Int}, refiner
     return refined_code
 end
 
+function refine(code::DynamicNestedEinsum{LT}, size_dict::Dict{LT, Int}, refiner::RankSARefiner, sc_target::Int, sc0::Number) where LT
+    refined_code = code
+    for i in 1:refiner.max_rounds
+        refined_code = rethermalize_rank(refined_code, size_dict, refiner.βs, refiner.ntrials, refiner.niters, sc_target, refiner.bipartite_optimization)
+    end
+    sc = contraction_complexity(refined_code, size_dict).sc
+    if sc > sc0
+        if refiner.reoptimize
+            reoptimized_code = rethermalize_rank(refined_code, size_dict, 1.0:0.1:20.0, 7, 60, sc_target, refiner.bipartite_optimization)
+            resc = contraction_complexity(reoptimized_code, size_dict).sc
+            refined_code = resc < sc ? reoptimized_code : refined_code
+        end
+    end
+    
+    return refined_code
+end
+
 function refine(code::DynamicNestedEinsum{LT}, size_dict::Dict{LT, Int}, refiner::ReoptimizeRefiner, sc_target::Int, sc0::Number) where LT
     refined_code = true_eincode(optimize_code(code, size_dict, refiner.optimizer))
     (contraction_complexity(refined_code, size_dict).sc > sc0) && (@warn "Refiner did not improve the code, got $(contraction_complexity(refined_code, size_dict).sc) instead of $sc0")

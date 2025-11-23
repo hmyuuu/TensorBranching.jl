@@ -143,6 +143,33 @@ function rethermalize(code::Union{DynamicNestedEinsum{LT}, SlicedEinsum{LT}}, si
     return optimize_code(code, size_dict, TreeSA(initializer = :specified, βs=βs, ntrials=ntrials, niters=niters, score = ScoreFunction(sc_target = sc_target)))
 end
 
+function rethermalize_rank(code::Union{DynamicNestedEinsum{LT}, SlicedEinsum{LT}}, size_dict::Dict{LT, Int}, βs::IT, ntrials::Int, niters::Int, sc_target::Int, bipartite_opt::Bool) where {LT, IT}
+    return optimize_code(code, size_dict, TreeSA(initializer = :specified, βs=βs, ntrials=ntrials, niters=niters, score = ScoreFunction(sc_target = sc_target)))
+end
+
+function graph_density(g::SimpleGraph)
+    n = nv(g)
+    n <= 1 && return 0.0
+    return 2 * ne(g) / (n * (n - 1))
+end
+
+function estimate_rankwidth_suitability(g::SimpleGraph)
+    density = graph_density(g)
+    n = nv(g)
+    
+    if density > 0.3
+        return :rank_preferred
+    elseif density > 0.1
+        if n > 50 && is_bipartite(g)
+            return :rank_suitable
+        else
+            return :tree_preferred
+        end
+    else
+        return :tree_preferred
+    end
+end
+
 
 # this part is about reindex the tree with a vertex map
 function inverse_vmap(vmap::Vector{Int})

@@ -21,6 +21,23 @@ For fast contraction on GPU, use
 using CUDA, CuTropicalGEMM
 ```
 
+### Choosing the Right Refiner
+
+TensorBranching provides two refinement strategies:
+
+- **TreeSA**: Best for sparse graphs (tree-like structures, low density)
+- **RankSA**: Best for dense graphs (grids, lattices, quantum circuits)
+
+```julia
+# Automatic selection based on graph properties
+refiner = estimate_rankwidth_suitability(g) in [:rank_preferred, :rank_suitable] ? 
+          RankSARefiner() : TreeSARefiner()
+
+slicer = ContractionTreeSlicer(sc_target = 25, refiner = refiner)
+```
+
+See `docs/RankSA_README.md` for details.
+
 ## Example
 
 ```julia

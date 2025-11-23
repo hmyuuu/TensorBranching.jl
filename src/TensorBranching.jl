@@ -12,7 +12,7 @@ using Base.Threads
 # types
 export AbstractRegionSelector, ScoreRS
 export AbstractSlicer, ContractionTreeSlicer
-export AbstractRefiner, TreeSARefiner, ReoptimizeRefiner
+export AbstractRefiner, TreeSARefiner, RankSARefiner, ReoptimizeRefiner
 export AbstractBrancher, GreedyBrancher, FixedPointBrancher
 export AbstractReducer, MISReducer, XiaoReducer, TensorNetworkReducer
 
@@ -25,6 +25,7 @@ export compress, uncompress
 
 # omeinsum interface
 export mis_complexity, auto_slicing, random_ksg, contraction_peak_memory, contraction_all_memory
+export graph_density, estimate_rankwidth_suitability
 
 # dynamic ob
 export kernelize, initialize_code, contract_slices

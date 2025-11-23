@@ -24,3 +24,7 @@ end
 @testset "io" begin
     include("io.jl")
 end
+
+@testset "ranksa" begin
+    include("ranksa.jl")
+end
