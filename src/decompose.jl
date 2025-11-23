@@ -1,12 +1,15 @@
 # transform optimized eincode to elimination order
 function eincode2order(code::NestedEinsum{L}) where {L}
+    OMEinsum.isleaf(code) && return Vector{L}()
+    
     elimination_order = Vector{L}()
-    OMEinsum.isleaf(code) && return elimination_order
+    # Pre-allocate with a reasonable size hint to reduce allocations
+    sizehint!(elimination_order, 32)
+    
     for node in PostOrderDFS(code)
         (node isa LeafString) && continue
-        for id in setdiff(vcat(getixsv(node.eins)...), getiyv(node.eins))
-            push!(elimination_order, id)
-        end
+        eliminated = setdiff(vcat(getixsv(node.eins)...), getiyv(node.eins))
+        append!(elimination_order, eliminated)
     end
     return reverse!(elimination_order)
 end
@@ -33,9 +36,15 @@ end
 
 function build_balanced_tree(leaves::Vector{Int})
     isempty(leaves) && error("empty leaf set for contraction tree")
+    length(leaves) == 1 && return leaves[1]
+    
     nodes = Vector{Union{ContractionTree, Int}}(leaves)
+    # Pre-allocate next level to reduce allocations
     while length(nodes) > 1
-        next = Union{ContractionTree, Int}[]
+        next_level_size = (length(nodes) + 1) ÷ 2
+        next = Vector{Union{ContractionTree, Int}}()
+        sizehint!(next, next_level_size)
+        
         i = 1
         while i <= length(nodes)
             if i == length(nodes)
@@ -78,15 +87,21 @@ code = decorate(parse_eincode(incidence_list, ct, vertices=collect(1:length(ixs)
 ```
 """
 function eo2ct(grouped_eo::Vector{<:AbstractVector{Int}}, incidence_list::IncidenceList, weights)
-    trees = Union{ContractionTree, Int}[]
+    isempty(grouped_eo) && error("empty elimination order")
+    
+    # Pre-allocate trees vector with size hint
+    trees = Vector{Union{ContractionTree, Int}}()
+    sizehint!(trees, length(grouped_eo))
+    
     for grp in grouped_eo
-        leaves = Int[]
-        for v in grp
-            push!(leaves, v)
-        end
+        # Directly use the group as leaves if it's already a Vector{Int}
+        # Otherwise collect efficiently
+        leaves = grp isa Vector{Int} ? grp : collect(grp)
         push!(trees, build_balanced_tree(leaves))
     end
-    return reduce((x,y) -> ContractionTree(x, y), trees)
+    
+    # Build final tree by reducing from left to right
+    return isempty(trees) ? error("no trees to combine") : reduce((x, y) -> ContractionTree(x, y), trees)
 end
 
 
@@ -98,23 +113,29 @@ function decompose(code::NestedEinsum{L}) where {L}
 end
 
 function max_bag(tree::DecompositionTreeNode)
-    max_bag = tree.bag
-    max_size = length(max_bag)
+    max_bag_node = tree.bag
+    max_size = length(max_bag_node)
     for node in PostOrderDFS(tree)
-        if length(node.bag) > max_size
-            max_bag = node.bag
-            max_size = length(node.bag)
+        bag_size = length(node.bag)
+        if bag_size > max_size
+            max_bag_node = node.bag
+            max_size = bag_size
         end
     end
-    return max_bag
+    return max_bag_node
 end
 
 # this function maps an elimination order on a old graph to a new graph with some vertices removed or reordered
 function update_order(eo_old::Vector{Int}, vmap::Vector{Int})
     ivmap = inverse_vmap_dict(vmap)
+    # Pre-allocate with size hint (at most length of eo_old)
     eo_new = Vector{Int}()
+    sizehint!(eo_new, length(eo_old))
+    
     for v in eo_old
-        haskey(ivmap, v) && push!(eo_new, ivmap[v])
+        if haskey(ivmap, v)
+            push!(eo_new, ivmap[v])
+        end
     end
     return eo_new
 end
@@ -139,7 +160,10 @@ function _collect_tensorindices(code)
     if hasfield(typeof(code), :tensorindex)
         return [code.tensorindex]
     else
+        # Pre-allocate with size hint based on number of arguments
         vs = Int[]
+        sizehint!(vs, length(code.args) * 2)  # Heuristic: assume ~2 indices per arg
+        
         for arg in code.args
             append!(vs, _collect_tensorindices(arg))
         end
@@ -157,6 +181,7 @@ function _ein2contraction_tree(code, pos)
     if hasfield(typeof(code), :tensorindex)
         return pos[code.tensorindex]
     else
+        # Build tree iteratively from left to right
         t = _ein2contraction_tree(code.args[1], pos)
         for i in 2:length(code.args)
             t = ContractionTree(t, _ein2contraction_tree(code.args[i], pos))
