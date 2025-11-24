@@ -1,7 +1,7 @@
 name = "TensorBranching"
 uuid = "86172e9d-0750-4338-909c-b7a43d7b620d"
-authors = ["Xuanzhao Gao <gaoxuanzhao@gmail.com> and contributors"]
 version = "1.0.0-DEV"
+authors = ["Xuanzhao Gao <gaoxuanzhao@gmail.com> and contributors"]
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -22,6 +22,9 @@ TreeWidthSolver = "7d267fc5-9ace-409f-a54c-cd2374872a55"
 TropicalNumbers = "b3a74e9c-7526-4576-a4eb-79c0d4c32334"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
+[sources]
+OptimalBranching = {path = "/Users/hmyuuu/.julia/dev/OptimalBranching"}
+
 [compat]
 AbstractTrees = "0.4.5"
 CSV = "0.10.15"
@@ -32,8 +35,8 @@ Graphs = "1.12.0"
 JLD2 = "0.5.11"
 JuMP = "1.28.0"
 OMEinsum = "0.9.1"
-OMEinsumContractionOrders = "1.2.0"
-OptimalBranching = "0.2"
+OMEinsumContractionOrders = "1.2"
+OptimalBranching = "0.2.0"
 ProblemReductions = "0.3.4"
 Random = "1.11.0"
 SCIP = "0.11, 0.12"
